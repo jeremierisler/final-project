@@ -1,0 +1,10 @@
+# Dataset dérivé, régénéré par src/make_dataset.py
+data/traffic_dataset_t1.npz
+
+# Python
+__pycache__/
+*.pyc
+
+# Jupyter / macOS
+.ipynb_checkpoints/
+.DS_Store

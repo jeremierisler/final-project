@@ -6,6 +6,7 @@ from scipy.sparse import issparse
 
 ROOT = Path(__file__).resolve().parent.parent
 DATA_PATH = ROOT / "data" / "traffic_dataset.mat"
+T1_PATH = ROOT / "data" / "traffic_dataset_t1.npz"  # label à t+1, cf. make_dataset.py
 
 
 def _dense(x):
@@ -19,6 +20,9 @@ def _stack(cells):
 
 
 def load_raw(path=DATA_PATH):
+    if Path(path).suffix == ".npz":
+        d = np.load(path)
+        return d["X_tr"], d["Y_tr"], d["X_te"], d["Y_te"], d["A"]
     m = loadmat(str(path))
     X_tr, X_te = _stack(m["tra_X_tr"]), _stack(m["tra_X_te"])  # (T, 36, 48)
     Y_tr = _dense(m["tra_Y_tr"]).T                             # (T, 36)
