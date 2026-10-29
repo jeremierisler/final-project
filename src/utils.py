@@ -5,8 +5,6 @@ from pathlib import Path
 import numpy as np
 
 ROOT = Path(__file__).resolve().parent.parent
-
-
 def evaluate(y_true, y_pred):
     e = y_true - y_pred
     return {"MAE": float(np.mean(np.abs(e))), "RMSE": float(np.sqrt(np.mean(e ** 2)))}
