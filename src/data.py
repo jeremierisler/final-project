@@ -42,7 +42,7 @@ def flatten(X, Y):
 
 
 def train_val_split(X, Y, val_frac=0.2):
-   cut = int(len(X) * (1 - val_frac))
+    cut = int(len(X) * (1 - val_frac))
     return (X[:cut], Y[:cut]), (X[cut:], Y[cut:])
 
 
