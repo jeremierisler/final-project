@@ -41,9 +41,9 @@ def flatten(X, Y):
     return X.reshape(T * S, F), Y.reshape(T * S), sensor
 
 
-# def train_val_split(X, Y, val_frac=0.2):
-#    cut = int(len(X) * (1 - val_frac))
-#    return (X[:cut], Y[:cut]), (X[cut:], Y[cut:])
+def train_val_split(X, Y, val_frac=0.2):
+   cut = int(len(X) * (1 - val_frac))
+    return (X[:cut], Y[:cut]), (X[cut:], Y[cut:])
 
 
 # def add_neighbors(X, A, n_lags=10):
@@ -53,14 +53,14 @@ def flatten(X, Y):
 #     return np.concatenate([X, nb], axis=2)
 
 
-def build( path=DATA_PATH):
+def build( path=DATA_PATH, val_frac=0.2):
     X_tr, Y_tr, X_te, Y_te, A = load_raw(path)
     # if variant == "spatial":
     #     X_tr, X_te = add_neighbors(X_tr, A), add_neighbors(X_te, A)
-    # (Xa, Ya), (Xv, Yv) = train_val_split(X_tr, Y_tr, val_frac)
-    X_tr, Y_tr, _ = flatten(X_tr, Y_tr)
-    X_te, Y_te, _ = flatten(X_te, Y_te)
+    (Xa, Ya), (Xv, Yv) = train_val_split(X_tr, Y_tr, val_frac) #séparation apprentissage et validation
+    Xa, Ya, _ = flatten(Xa, Ya)
+    Xv, Yv, _ = flatten(Xv, Yv)
     # if scaled:
     #     sc = StandardScaler().fit(X_tr)
     #     X_tr, X_te = sc.transform(X_tr), sc.transform(X_te)
-    return dict(X_train=X_tr, y_train=Y_tr, X_test=X_te, y_test=Y_te)
+    return dict(X_train=Xa, y_train=Ya, X_val=Xv, y_val=Yv)
