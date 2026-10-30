@@ -1,0 +1,13 @@
+import sys; sys.path.append("..")
+from src.data import build
+from models.linear_regression import solve_linear_regression, apply_linear_regression
+from src.utils import evaluate
+
+d = build() #construction des données, elles sont nickels pour la suite
+
+beta = solve_linear_regression(d["X_train"], d["y_train"])
+y_esti=apply_linear_regression(d["X_val"],beta)
+
+m = evaluate(d["y_val"], y_esti)
+
+print(m)
