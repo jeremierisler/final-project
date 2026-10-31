@@ -79,17 +79,21 @@ final-project/
 │   ├── traffic_dataset.mat          # données d'origine
 │   └── traffic_dataset_t1.npz       # généré : cible à t+1 (non versionné)
 ├── docs/
-│   └── traffic_dataset_t1_explorateur.html   # visualisation des variables
+│   ├── traffic_dataset_t1_explorateur.html   # visualisation des variables
+│   └── var_graphe.tex               # modèle mathématique de la VAR contrainte par le graphe
 ├── notebooks/
 │   ├── 00_eda_preprocessing.ipynb   # exploration des données (à compléter)
 │   ├── 01_notebook_model.ipynb      # forêt aléatoire
-│   └── 02_mlp.ipynb                 # réseau de neurones (MLP)
+│   ├── 02_mlp.ipynb                 # réseau de neurones (MLP)
+│   └── 03_var_graphe.ipynb          # VAR contrainte par le graphe
 ├── src/
 │   ├── data.py                      # chargement, découpage, normalisation, variante spatiale
 │   ├── make_dataset.py              # génération du dataset t+1
-│   └── utils.py                     # métriques (MAE, RMSE), journal des résultats
+│   ├── utils.py                     # métriques (MAE, RMSE), journal des résultats
+│   └── var_graphe.py                # modèle VAR : une Ridge par capteur
 └── tests/
-    └── check_setup.py               # vérifications automatiques du pipeline de données
+    ├── check_setup.py               # vérifications automatiques du pipeline de données
+    └── check_var_graphe.py          # vérifications automatiques du modèle VAR
 ```
 
 **Protocole commun à tous les modèles** (`src/data.build`) :
@@ -102,15 +106,17 @@ final-project/
 *À compléter (versions exactes, commandes testées).*
 
 ```bash
-pip install numpy scipy scikit-learn pandas matplotlib jupyter
+pip install numpy scipy scikit-learn pandas matplotlib plotly nbformat jupyter
 cd final-project
 python src/make_dataset.py        # crée data/traffic_dataset_t1.npz
 python tests/check_setup.py       # vérifie le pipeline de données
+python tests/check_var_graphe.py  # vérifie le modèle VAR
 jupyter notebook notebooks/       # puis exécuter les notebooks dans l'ordre
 ```
 
 Réglages modifiables :
 - `02_mlp.ipynb` : nombre de neurones `h`, activation `act`, variante (`base` / `spatial`), cible (`debit` / `variation`), graines `SEEDS`.
+- `03_var_graphe.ipynb` : voisinages testés `voisinages` (nombre de sauts `K`), pénalités testées `alphas`.
 
 ## 6. Modèles et résultats
 
@@ -122,6 +128,7 @@ Réglages modifiables :
 | Régression linéaire | | | | |
 | Forêt aléatoire | | | | |
 | MLP | | | | |
+| VAR graphe | 2 sauts, alpha = 0,3 | 0,0303 | 0,0337 | 0,0232 |
 
 ## 7. Limites et perspectives
 
