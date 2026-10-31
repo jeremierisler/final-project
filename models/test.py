@@ -1,4 +1,9 @@
-import sys; sys.path.append("..")
+import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT))
+
 from src.data import build
 from models.linear_regression import solve_linear_regression, apply_linear_regression
 from src.utils import evaluate
