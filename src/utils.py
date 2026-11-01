@@ -7,9 +7,13 @@ import numpy as np
 ROOT = Path(__file__).resolve().parent.parent
 
 
+def rmse(y_true, y_pred):
+    return float(np.sqrt(np.mean((y_true - y_pred) ** 2)))
+
+
 def evaluate(y_true, y_pred):
     e = y_true - y_pred
-    return {"MAE": float(np.mean(np.abs(e))), "RMSE": float(np.sqrt(np.mean(e ** 2)))}
+    return {"RMSE": rmse(y_true, y_pred), "MAE": float(np.mean(np.abs(e)))}
 
 
 def log_result(model, variant, params, split, metrics):
@@ -19,6 +23,6 @@ def log_result(model, variant, params, split, metrics):
     with open(path, "a", newline="") as f:
         w = csv.writer(f)
         if new:
-            w.writerow(["time", "model", "variant", "params", "split", "MAE", "RMSE"])
+            w.writerow(["time", "model", "variant", "params", "split", "RMSE", "MAE"])
         w.writerow([time.strftime("%d/%m %H:%M"), model, variant, params, split,
-                    metrics["MAE"], metrics["RMSE"]])
+                    metrics["RMSE"], metrics["MAE"]])
