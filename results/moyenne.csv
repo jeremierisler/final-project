@@ -1,0 +1,2 @@
+time,model,variant,params,split,RMSE,MAE
+01/11 15:11,moyenne,base,mean,val,0.20001936504796916,0.16790347873286152
