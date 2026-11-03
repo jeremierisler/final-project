@@ -8,3 +8,8 @@ __pycache__/
 # Jupyter / macOS
 .ipynb_checkpoints/
 .DS_Store
+
+docs
+
+# Scores générés par log_result
+results/
