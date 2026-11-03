@@ -1,8 +1,8 @@
 import os, sys
 sys.path.insert(0, ".")
 import numpy as np, pandas as pd
-from src.data import load_raw, flatten, train_val_split, add_neighbors, build
-from src.utils import evaluate, log_result
+from src.data_jerem import load_raw, flatten, train_val_split, add_neighbors, build, target_for_horizon
+from src.utils_jerem import evaluate, log_result
 
 ok = lambda msg: print("✓", msg)
 X_tr, Y_tr, X_te, Y_te, A = load_raw()
@@ -61,4 +61,13 @@ df = pd.read_csv("results/_test.csv")
 assert len(df) == 2 and df.loc[0, "params"] == "n=200,depth=10"
 os.remove("results/_test.csv")
 ok("log_result")
+
+# horizon 1 : mêmes formes, cible cohérente avec les lags
+Y1 = target_for_horizon(X_tr, Y_tr, 1)
+assert Y1.shape == Y_tr.shape
+assert np.allclose(Y1[:-1], X_tr[1:, :, 9])    # cible de l'instant i = dernier débit de l'instant i+1
+assert np.allclose(Y1[1:], Y_tr[:-1])
+d1 = build("base", horizon=1)
+assert d1["X_val"].shape == (9108, 48) and d1["X_test"].shape == (30240, 48)
+ok("horizon 1")
 print("TOUS LES TESTS AUTOMATIQUES PASSENT")

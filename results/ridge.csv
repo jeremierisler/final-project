@@ -1,0 +1,2 @@
+time,model,variant,params,split,RMSE,MAE
+01/11 15:11,ridge,base,défaut,val,0.04658897123098305,0.02976476690562463
