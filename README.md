@@ -82,17 +82,23 @@ final-project/
 │   ├── traffic_dataset_t1_explorateur.html   # visualisation des variables
 │   └── var_graphe.tex               # modèle mathématique de la VAR contrainte par le graphe
 ├── notebooks/
-│   ├── 00_eda_preprocessing.ipynb   # exploration des données (à compléter)
-│   ├── 01_notebook_model.ipynb      # forêt aléatoire
+│   ├── 00_eda_preprocessing.ipynb   # exploration des données et premiers modèles
+│   ├── 01_notebook_model.ipynb      # première forêt aléatoire, cible t+2 (remplacée par 07)
 │   ├── 02_mlp.ipynb                 # réseau de neurones (MLP)
-│   └── 03_var_graphe.ipynb          # VAR contrainte par le graphe
+│   ├── 03_regression_lineaire.ipynb # régression linéaire, du modèle commun aux voisins
+│   ├── 04_var_graphe.ipynb          # VAR contrainte par le graphe
+│   ├── 07_arbres.ipynb              # forêt aléatoire et XGBoost
+│   └── 09_SADL_optimisation.ipynb   # SADL-I optimisé par ADMM
+├── results/                         # scores enregistrés par log_result (un CSV par modèle)
 ├── src/
 │   ├── data.py                      # chargement, découpage, normalisation, variante spatiale
+│   ├── data_jerem.py                # variante de data.py utilisée par 00 et 07
 │   ├── make_dataset.py              # génération du dataset t+1
 │   ├── utils.py                     # métriques (MAE, RMSE), journal des résultats
+│   ├── utils_jerem.py               # variante de utils.py utilisée par 00 et 07
 │   └── var_graphe.py                # modèle VAR : une Ridge par capteur
 └── tests/
-    ├── check_setup.py               # vérifications automatiques du pipeline de données
+    ├── check_setup.py               # vérifications automatiques du pipeline (data_jerem)
     └── check_var_graphe.py          # vérifications automatiques du modèle VAR
 ```
 
@@ -106,7 +112,7 @@ final-project/
 *À compléter (versions exactes, commandes testées).*
 
 ```bash
-pip install numpy scipy scikit-learn pandas matplotlib plotly nbformat jupyter
+pip install numpy scipy scikit-learn pandas matplotlib plotly nbformat xgboost jupyter
 cd final-project
 python src/make_dataset.py        # crée data/traffic_dataset_t1.npz
 python tests/check_setup.py       # vérifie le pipeline de données
@@ -116,7 +122,7 @@ jupyter notebook notebooks/       # puis exécuter les notebooks dans l'ordre
 
 Réglages modifiables :
 - `02_mlp.ipynb` : nombre de neurones `h`, activation `act`, variante (`base` / `spatial`), cible (`debit` / `variation`), graines `SEEDS`.
-- `03_var_graphe.ipynb` : voisinages testés `voisinages` (nombre de sauts `K`), pénalités testées `alphas`.
+- `04_var_graphe.ipynb` : voisinages testés `voisinages` (nombre de sauts `K`), pénalités testées `alphas`.
 
 ## 6. Modèles et résultats
 
