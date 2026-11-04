@@ -1,144 +1,169 @@
-# Prévision du trafic routier — mini-projet DAML
+# Prévision du trafic routier à court terme
 
-> **Document en cours de rédaction.** Les sections marquées *À compléter* seront remplies au fur et à mesure des expériences.
+Mini-projet *Data Analytics & Machine Learning*, CentraleSupélec, dominante ROC, 2026-2027. **Groupe 19** : Madeleine Lemaistre, Jérémie Risler, Thibault Millet, Enzo Thessieu, Arthur de Kermel.
 
-Mini-projet du cours *Data Analytics & Machine Learning* (CentraleSupélec, dominante ROC, 2026-2027).
+Nous prédisons le débit de 36 capteurs autoroutiers **15 et 30 minutes à l'avance**, à partir de la base UCI *Traffic Flow Forecasting*, et comparons six familles de modèles sur un protocole commun. Ce README est le mode d'emploi du code. L'analyse complète est dans le rapport.
 
-## 1. Le projet
+## Sommaire
 
-**Objectif** : prédire le débit de véhicules mesuré par 36 capteurs routiers **15 minutes à l'avance**, à partir de l'historique récent du capteur, du moment (jour, heure) et des caractéristiques de la route.
+1. [Démarrage rapide](#1-démarrage-rapide)
+2. [Organisation du dépôt](#2-organisation-du-dépôt)
+3. [Les notebooks](#3-les-notebooks)
+4. [Tester d'autres réglages](#4-tester-dautres-réglages)
+5. [Données et protocole](#5-données-et-protocole)
+6. [Résultats](#6-résultats)
+7. [Remarques](#7-remarques)
 
-**Formulation** : régression supervisée. Pour chaque instant t et chaque capteur i, on apprend une fonction f telle que
+## 1. Démarrage rapide
 
-  ŷᵢ(t+1) = f(xᵢ(t)),  avec xᵢ(t) ∈ ℝ⁴⁸ (variables décrites en section 2)
-
-en minimisant l'erreur quadratique. Chaque couple (instant, capteur) est un exemple : environ 45 000 exemples d'entraînement et 30 000 de test.
-
-**Référence à battre** : la *persistance*, ŷ(t+1) = y(t). À 15 minutes, le trafic varie peu et cette référence est déjà forte. Un modèle n'a d'intérêt que s'il fait mieux.
-
-**Métriques** : RMSE et MAE, dans l'unité du débit normalisé (entre 0 et 1).
-
-## 2. Le dataset
-
-**Source** : *Traffic Flow Forecasting*, UCI Machine Learning Repository. Débits mesurés toutes les 15 minutes par 36 capteurs sur deux autoroutes de la région de Washington D.C. / Virginie du Nord.
-
-> L. Zhao, O. Gkountouna, D. Pfoser (2019). *Spatial Auto-regressive Dependency Interpretable Learning Based on Spatial Topological Constraints.* ACM Trans. Spatial Algorithms Syst. 5(3), 19. https://doi.org/10.1145/3339823
-
-**Contenu de `data/traffic_dataset.mat`**
-
-| Variable | Forme | Contenu |
-|---|---|---|
-| `tra_X_tr` | 1 × 1261 cellules, chacune 36 × 48 (creuse) | variables d'entrée, entraînement |
-| `tra_Y_tr` | 36 × 1261 | cible, entraînement |
-| `tra_X_te` | 1 × 840 cellules, chacune 36 × 48 | variables d'entrée, test |
-| `tra_Y_te` | 36 × 840 | cible, test |
-| `tra_adj_mat` | 36 × 36 | matrice d'adjacence entre capteurs |
-
-Chaque cellule correspond à **un instant** : une ligne par capteur, une colonne par variable.
-
-**Les 48 variables (indices Python)**
-
-| Colonnes | Variable | Varie selon |
-|---|---|---|
-| 0–9 | débits passés, de t−9 (col. 0) à t (col. 9) | instant et capteur |
-| 10–14 | jour de la semaine, one-hot (lundi à vendredi) | instant |
-| 15–38 | heure de la journée, one-hot (0 à 23 h) | instant |
-| 39 | nombre de voies (1 à 5) | capteur |
-| 40–43 | direction, one-hot | capteur |
-| 44–47 | route, one-hot | capteur |
-
-Les débits sont **déjà normalisés** entre 0 et 1 dans le fichier fourni.
-
-## 3. Écarts avec la documentation et retraitement
-
-La documentation du dataset est courte et ne correspond pas exactement au fichier. Avant de modéliser, on a donc vérifié la structure réelle des données, ligne par ligne :
-
-1. **48 variables, et non 47.** La documentation annonce 7 colonnes pour le jour et 1 pour le nom de la route. Le fichier contient **5 colonnes de jour** et **4 colonnes one-hot de route**, d'où 10 + 5 + 24 + 1 + 4 + 4 = 48.
-
-2. **Aucun week-end.** Seuls les jours ouvrés sont présents : 96 instants par jour (4 × 24), du lundi au vendredi. Le jeu d'entraînement couvre environ 13 jours ouvrés, le jeu de test environ 8,75.
-
-3. **La cible fournie est à t+2 (30 min), et non à t+1 (15 min).** La documentation indique *« predict the traffic volume 15 minutes into the future »*. Pourtant, d'une ligne à la suivante, les 10 débits passés se décalent exactement d'un cran (une ligne = 15 min), et `tra_Y(:, k)` est égal au débit « t » de la ligne **k+2** sur 100 % des lignes, en entraînement comme en test. Ce n'est le cas pour la ligne k+1 que dans moins de 1 % des cas (des coïncidences).
-
-4. **Le test suit directement l'entraînement.** La première ligne de test prolonge la dernière ligne d'entraînement, et la relation ci-dessus reste vraie à la jonction.
-
-5. **L'horodatage est imparfait, mais pas les débits.** La série des débits est continue (aucune rupture dans le décalage des retards). En revanche, les variables jour et heure sont parfois irrégulières : certaines heures ne comptent que 3 instants, certains jours 94 au lieu de 96, et le test commence au milieu d'une journée.
-
-**Retraitement** : `src/make_dataset.py` génère `data/traffic_dataset_t1.npz`, où **X est inchangé** et la cible est recalculée à **t+1** :
-
-  Y[k] = X[k+1, :, 9]  (débit « t » de l'instant suivant)
-
-Pour la dernière ligne, on prend `Y[T-2]` du `.mat` d'origine, qui contient exactement ce débit. Aucune ligne n'est donc perdue. Ce fichier n'est pas versionné (`.gitignore`) : il est régénéré automatiquement par les notebooks s'il est absent.
-
-**Visualisation** : `docs/traffic_dataset_t1_explorateur.html` affiche toutes les données de ce fichier, capteur par capteur (48 variables et la cible t+1, entraînement et test). Il s'ouvre dans n'importe quel navigateur, sans installation.
-
-## 4. Organisation du dépôt
-
-```
-final-project/
-├── data/
-│   ├── traffic_dataset.mat          # données d'origine
-│   └── traffic_dataset_t1.npz       # généré : cible à t+1 (non versionné)
-├── docs/
-│   ├── traffic_dataset_t1_explorateur.html   # visualisation des variables
-│   └── var_graphe.tex               # modèle mathématique de la VAR contrainte par le graphe
-├── notebooks/
-│   ├── 00_eda_preprocessing.ipynb   # exploration des données et premiers modèles
-│   ├── 01_notebook_model.ipynb      # première forêt aléatoire, cible t+2 (remplacée par 07)
-│   ├── 02_mlp.ipynb                 # réseau de neurones (MLP)
-│   ├── 03_regression_lineaire.ipynb # régression linéaire, du modèle commun aux voisins
-│   ├── 04_var_graphe.ipynb          # VAR contrainte par le graphe
-│   ├── 07_arbres.ipynb              # forêt aléatoire et XGBoost
-│   └── 09_SADL_optimisation.ipynb   # SADL-I optimisé par ADMM
-├── results/                         # scores enregistrés par log_result (un CSV par modèle)
-├── src/
-│   ├── data.py                      # chargement, découpage, normalisation, variante spatiale
-│   ├── data_jerem.py                # variante de data.py utilisée par 00 et 07
-│   ├── make_dataset.py              # génération du dataset t+1
-│   ├── utils.py                     # métriques (MAE, RMSE), journal des résultats
-│   ├── utils_jerem.py               # variante de utils.py utilisée par 00 et 07
-│   └── var_graphe.py                # modèle VAR : une Ridge par capteur
-└── tests/
-    ├── check_setup.py               # vérifications automatiques du pipeline (data_jerem)
-    └── check_var_graphe.py          # vérifications automatiques du modèle VAR
-```
-
-**Protocole commun à tous les modèles** (`src/data.build`) :
-- découpage **chronologique** : train = 80 % premiers instants du jeu d'entraînement, validation = 20 % suivants, test = jeu de test d'origine, utilisé une seule fois à la fin ;
-- normalisation (`StandardScaler`) apprise sur le train uniquement ;
-- variante `spatial` : ajoute, pour chaque capteur, la moyenne des 10 débits passés de ses voisins (matrice d'adjacence), soit 58 variables.
-
-## 5. Mode d'emploi
-
-*À compléter (versions exactes, commandes testées).*
+Le code a été testé avec **Python 3.11.5** sous Windows. Toutes les commandes se lancent depuis la racine du dépôt.
 
 ```bash
+# 1. Installer les dépendances
 pip install numpy scipy scikit-learn pandas matplotlib plotly nbformat xgboost jupyter
-cd final-project
-python src/make_dataset.py        # crée data/traffic_dataset_t1.npz
-python tests/check_setup.py       # vérifie le pipeline de données
-python tests/check_var_graphe.py  # vérifie le modèle VAR
-jupyter notebook notebooks/       # puis exécuter les notebooks dans l'ordre
+
+# 2. Créer la cible à 15 minutes (data/traffic_dataset_t1.npz)
+python src/make_dataset.py
+
+# 3. Vérifier que tout fonctionne
+python tests/check_setup.py        # pipeline de données
+python tests/check_var_graphe.py   # modèle VAR
+
+# 4. Ouvrir les notebooks
+jupyter notebook notebooks/
 ```
 
-Réglages modifiables :
-- `02_mlp.ipynb` : nombre de neurones `h`, activation `act`, variante (`base` / `spatial`), cible (`debit` / `variation`), graines `SEEDS`.
-- `04_var_graphe.ipynb` : voisinages testés `voisinages` (nombre de sauts `K`), pénalités testées `alphas`.
+Chaque test affiche `TOUS LES TESTS AUTOMATIQUES PASSENT` en cas de succès. L'étape 2 est facultative : les notebooks créent ce fichier eux-mêmes s'il manque.
 
-## 6. Modèles et résultats
+Exécutez ensuite un notebook du début à la fin (*Run All*). Ils sont indépendants les uns des autres et peuvent être lancés dans n'importe quel ordre. Ouvrez-les depuis le dossier `notebooks/` : ils retrouvent le code de `src/` par un chemin relatif.
 
-*À compléter.*
+<details>
+<summary>Versions testées</summary>
 
-| Modèle | Variante | RMSE val | RMSE test | MAE test |
-|---|---|---|---|---|
-| Persistance | — | | | |
-| Régression linéaire | | | | |
-| Forêt aléatoire | | | | |
-| MLP | | | | |
-| VAR graphe | 2 sauts, alpha = 0,3 | 0,0303 | 0,0337 | 0,0232 |
+| Paquet | Version |
+|---|---|
+| numpy | 1.26.1 |
+| scipy | 1.13.1 |
+| scikit-learn | 1.5.2 |
+| pandas | 2.1.3 |
+| matplotlib | 3.8.1 |
+| plotly | 5.18.0 |
+| nbformat | 5.11.1 |
+| xgboost | 3.2.0 |
 
-## 7. Limites et perspectives
+`nbformat` est nécessaire pour afficher les graphiques Plotly dans un notebook.
+</details>
 
-*À compléter.* Pistes déjà identifiées :
-- chaque exemple (instant, capteur) est traité indépendamment : l'historique n'est vu qu'à travers les 10 débits passés fournis ;
-- la topologie du réseau routier n'est exploitée que par une moyenne des voisins, alors que l'article d'origine en fait le cœur de la méthode ;
-- modèles séquentiels (LSTM) ou sur graphe, et prédiction à plusieurs pas (t+1, t+2…) pour mesurer la dégradation avec l'horizon.
+## 2. Organisation du dépôt
+
+```text
+final-project/
+├── data/
+│   └── traffic_dataset.mat              données d'origine (UCI)
+├── notebooks/                           un notebook par modèle (section 3)
+├── src/
+│   ├── data.py                          chargement, découpage chronologique, normalisation, moyenne des voisins
+│   ├── make_dataset.py                  construction de la cible à t+1 (15 min)
+│   ├── utils.py                         métriques (RMSE, MAE) et enregistrement des scores
+│   ├── var_graphe.py                    modèle VAR contraint par le graphe
+│   ├── data_jerem.py                    variante de data.py utilisée par les notebooks 00 et 07
+│   └── utils_jerem.py                   variante de utils.py utilisée par les notebooks 00 et 07
+├── tests/
+│   ├── check_setup.py                   tests automatiques du pipeline de données (data_jerem.py)
+│   ├── check_var_graphe.py              tests automatiques du modèle VAR
+│   ├── affichage.py, test_y.py          scripts d'exploration du fichier .mat
+├── results/                             scores enregistrés par les notebooks, un CSV par modèle
+└── docs/
+    ├── traffic_dataset_t1_explorateur.html   toutes les variables, capteur par capteur (s'ouvre dans un navigateur)
+    └── section_mlp.tex, figures/        section MLP du rapport et sa figure
+```
+
+## 3. Les notebooks
+
+Les durées ont été mesurées sur un ordinateur portable.
+
+| Notebook | Contenu | Auteur | Durée |
+|---|---|---|---|
+| `00_eda_preprocessing` | exploration des données, références (moyenne, persistance), premiers modèles | Jérémie | < 1 min |
+| `01_notebook_model` | première forêt aléatoire, cible à 30 min ; remplacé par `07_arbres` | Jérémie | < 1 min |
+| `02_mlp` | réseau de neurones à une couche cachée : variantes, nombre de neurones, activation, ensemble de 5 graines | Thibault | **long** : plusieurs dizaines de minutes |
+| `03_regression_lineaire` | moindres carrés : modèle commun, modèle par capteur, ajout des voisins | Madeleine | ≈ 2 min |
+| `04_var_graphe` | VAR contraint par le graphe : réglage de $K$ et $\alpha$, matrice d'influence, test aux deux horizons | Arthur | < 1 min |
+| `07_arbres` | forêt aléatoire et XGBoost : recherche de réglages, validation glissante, importance des variables, test | Jérémie | ≈ 16 min |
+| `09_SADL_optimisation` | SADL-I, méthode de l'article d'origine, optimisée par ADMM | Enzo | ≈ 7 min |
+
+Chaque notebook suit le protocole de la section 5 : réglage sur la validation, puis une seule évaluation sur le test, à 15 et 30 minutes.
+
+## 4. Tester d'autres réglages
+
+Modifiez la variable indiquée, puis relancez le notebook en entier.
+
+| Notebook | Où modifier | Exemple |
+|---|---|---|
+| `02_mlp` | cellule *Préparation* : `SEEDS` ; arguments de `run(...)` : `variant` (`base` / `spatial`), `cible` (`debit` / `variation`), `h` (neurones), `act` (`tanh` / `relu`) | `run("spatial", "variation", h=50)` |
+| `03_regression_lineaire` | sections *Modèle local* et *Prise en compte des voisins* : nombre de sauts dans le graphe | voisinage à 3 sauts |
+| `04_var_graphe` | cellule des fonctions utilitaires : `voisinages` et `alphas` ; section *Lecture du modèle* : `capteur` | `"3 sauts": (A, 3)` dans `voisinages` |
+| `07_arbres` | section *Recherche de réglages* : grille de la forêt (`n`, profondeur, feuille minimale, fraction de variables) et tirages d'XGBoost | ajouter 500 arbres à la grille |
+| `09_SADL_optimisation` | cellule d'optimisation : `sigma` et `lamda` ; balayages de $\sigma$ et $\lambda$ dans les cellules commentées en fin de notebook | `sigma = 5.0` |
+
+Dans `04_var_graphe`, la meilleure configuration est sélectionnée automatiquement sur la validation : il suffit d'ajouter des valeurs.
+
+Pour un usage hors notebook, le modèle VAR s'emploie en quatre lignes :
+
+```python
+from src.data import load_raw, T1_PATH
+from src import var_graphe
+
+X_tr, Y_tr, X_te, Y_te, A = load_raw(T1_PATH)                     # tableaux (instants, capteurs, variables)
+models, hoods = var_graphe.fit(X_tr, Y_tr, A, K=2, alpha=0.3)     # une régression Ridge par capteur
+Y_pred = var_graphe.predict(X_te, models, hoods)                  # (instants, 36)
+```
+
+## 5. Données et protocole
+
+**Données.** Le fichier `data/traffic_dataset.mat` contient 1 261 instants d'entraînement et 840 instants de test, qui les prolongent directement, pour 36 capteurs. Un instant correspond à 15 minutes. Pour chaque instant et chaque capteur, il y a 48 variables :
+
+| Colonnes | Variable |
+|---|---|
+| 0–9 | 10 derniers débits, de $t-9$ à $t$ (colonne 9 = débit actuel) |
+| 10–14 | jour de la semaine, lundi à vendredi (one-hot) |
+| 15–38 | heure de la journée (one-hot) |
+| 39 | nombre de voies |
+| 40–47 | direction et route (one-hot) |
+
+Le fichier contient aussi la matrice d'adjacence `A` (36 × 36) entre capteurs.
+
+**Écart avec la documentation UCI.** La cible fournie est le débit à $t+2$, soit **30 minutes**, et non 15 minutes comme annoncé. `src/make_dataset.py` reconstruit une cible à $t+1$ (15 minutes) sans perdre d'instant :
+
+| Horizon | Fichier | Constante dans `src/data.py` |
+|---|---|---|
+| 15 min | `data/traffic_dataset_t1.npz` (généré) | `T1_PATH` |
+| 30 min | `data/traffic_dataset.mat` (d'origine) | `DATA_PATH` |
+
+**Protocole commun.**
+- **Découpage chronologique :** les 80 % premiers instants d'entraînement servent à l'apprentissage, les 20 % suivants à la validation (choix des réglages), et le jeu de test n'est utilisé qu'une fois, après réentraînement sur entraînement + validation.
+- **Pas de mélange :** deux instants consécutifs partagent 9 débits sur 10, donc mélanger les lignes fausserait l'évaluation.
+- **Métriques :** RMSE et MAE, en débit normalisé (entre 0 et 1).
+- **Référence :** la *persistance*, qui prédit le dernier débit connu.
+
+## 6. Résultats
+
+Scores sur le **jeu de test** (RMSE / MAE, débit normalisé) :
+
+| Modèle | 15 min | 30 min |
+|---|---|---|
+| Persistance | 0,0388 / 0,0266 | 0,0545 / 0,0372 |
+| Moindres carrés, voisins directs | 0,0333 / 0,0228 | 0,0389 / 0,0266 |
+| VAR contraint par le graphe ($K=2$, $\alpha=0{,}3$) | 0,0337 / 0,0232 | 0,0391 / 0,0269 |
+| Forêt aléatoire | 0,0309 / 0,0208 | 0,0353 / 0,0234 |
+| XGBoost | 0,0310 / 0,0210 | 0,0357 / 0,0240 |
+| **MLP**, ensemble de 5 réseaux | **0,0302 / 0,0205** | **0,0348 / 0,0235** |
+| SADL-I | — | 0,0449 / 0,0304 |
+
+Les trois modèles non linéaires sont à égalité en pratique et devancent les modèles linéaires d'environ 10 %. Les notebooks ajoutent leurs scores dans `results/<modèle>.csv`, avec la date, les réglages et le jeu évalué. Chaque exécution ajoute de nouvelles lignes.
+
+## 7. Remarques
+
+- **Heures :** le trafic monte dès 2–3 h d'après les libellés du fichier. Ces heures ne sont probablement pas en heure locale, d'où l'expression « heures du fichier » dans les notebooks.
+- **Deux versions des modules de données :** `data.py` / `utils.py` et `data_jerem.py` / `utils_jerem.py` ont été développées en parallèle et coexistent. Chaque notebook importe la sienne.
+- **Week-ends :** le jeu de données n'en contient pas, donc toutes les conclusions portent sur des jours ouvrés.
